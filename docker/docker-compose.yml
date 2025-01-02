@@ -1,0 +1,9 @@
+version: '3.9'
+services:
+  searchupdater:
+    image: searchupdater:1.0.0
+    ports:
+      - "8090:8090"
+    build:
+      context: ..
+      dockerfile: docker/searchupdater.dockerfile
