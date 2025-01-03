@@ -8,6 +8,7 @@ import java.util.Objects;
 public class Offer {
     @Id
     private String id;
+    @Column
     private String name;
 
     @ManyToOne(fetch = FetchType.LAZY)

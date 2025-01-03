@@ -8,6 +8,7 @@ import java.util.Objects;
 public class Product {
     @Id
     private String id;
+    @Column
     private String name;
 
     @Transient

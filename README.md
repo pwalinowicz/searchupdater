@@ -5,6 +5,7 @@
 * Java 21
 * Spring Boot
 * Gradle
+* H2
 
 ### Building & Deployment
 The service can be built with the following command:
