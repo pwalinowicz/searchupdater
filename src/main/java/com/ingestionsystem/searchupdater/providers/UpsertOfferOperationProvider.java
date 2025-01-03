@@ -10,6 +10,7 @@ import com.ingestionsystem.searchupdater.validation.FieldValidator;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 public class UpsertOfferOperationProvider extends SearchEngineOperationProvider {
 
@@ -31,27 +32,28 @@ public class UpsertOfferOperationProvider extends SearchEngineOperationProvider 
                 // no changes in the offer
                 return List.of();
             } else {
-                operations.addAll(getDeleteProductOperation(existingOffer.get().getProduct(),
+                operations.addAll(getOperationsForExistingProduct(existingOffer.get().getProduct(),
                         offerFromRequest, request.relatedProductId()));
             }
         }
 
         if (request.relatedProductId() == null) {
+            // if relatedProductId is null then we don't need additional upsert
             offerFromRequest.setProduct(null);
             offerRepository.updateOrInsert(offerFromRequest);
         } else {
-            assignOfferToNewProductFromRequest(offerFromRequest, operations, request.relatedProductId());
+            operations.addAll(getOperationsForNewProduct(offerFromRequest, request.relatedProductId()));
         }
 
         return operations;
     }
 
-    private List<BaseSearchEngineOperation> getDeleteProductOperation(
+    private List<BaseSearchEngineOperation> getOperationsForExistingProduct(
             Product existingProduct, Offer offerFromRequest, String relatedProductId) {
         if (existingProduct != null && existingProduct.isValid()) {
             var existingOffers = offerRepository.findByProductId(existingProduct.getId());
-//                if (request.relatedProductId() == null && existingOffers.size() == 1) {
-            if (existingOffers.size() == 1) {
+
+            if (existingOffers.size() == 1 && !Objects.equals(relatedProductId, existingProduct.getId())) {
                 // there is currently 1 offer related to the product
                 // and request wants to delete it therefore, we need to delete a searchable product as well
                 return List.of(SearchEngineOperationProvider.getDeleteSearchEngineOperation(existingProduct));
@@ -68,8 +70,7 @@ public class UpsertOfferOperationProvider extends SearchEngineOperationProvider 
         return List.of();
     }
 
-    private void assignOfferToNewProductFromRequest(Offer offer, List<BaseSearchEngineOperation> operations,
-                                                    String relatedProductId) {
+    private List<BaseSearchEngineOperation> getOperationsForNewProduct(Offer offer, String relatedProductId) {
         var newProductOptional = productRepository.findById(relatedProductId);
         if (newProductOptional.isPresent()) {
             var existingProduct = newProductOptional.get();
@@ -77,7 +78,7 @@ public class UpsertOfferOperationProvider extends SearchEngineOperationProvider 
             offerRepository.updateOrInsert(offer);
             if (newProductOptional.get().isValid()) {
                 var offers = offerRepository.findByProductId(existingProduct.getId()).stream().map(Offer::getName).toList();
-                operations.add(SearchEngineOperationProvider.getUpsertSearchEngineOperation(existingProduct, offers));
+                return List.of(SearchEngineOperationProvider.getUpsertSearchEngineOperation(existingProduct, offers));
             }
         } else {
             var product = new Product();
@@ -86,6 +87,7 @@ public class UpsertOfferOperationProvider extends SearchEngineOperationProvider 
             offer.setProduct(product);
             offerRepository.updateOrInsert(offer);
         }
+        return List.of();
     }
 
     @Override
