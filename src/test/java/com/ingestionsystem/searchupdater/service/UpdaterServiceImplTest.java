@@ -94,6 +94,7 @@ public class UpdaterServiceImplTest {
         verify(productRepository, times(1)).delete(any());
         assertThat(productRepository.findAll().size()).isEqualTo(0);
         var savedOfferOptional = offerRepository.findById("offerA");
+        assertThat(savedOfferOptional.isPresent()).isTrue();
         savedOfferOptional.ifPresent(offer -> assertThat(offer.getProduct()).isNull());
     }
 
@@ -449,5 +450,116 @@ public class UpdaterServiceImplTest {
 
         //then
         assertThat(responseOperations.size()).isEqualTo(0);
+    }
+
+    @Test
+    void shouldDeleteExistingOfferForOfferWithProductWithOneOffer() {
+        // given
+        var productId = "productA";
+        var product = new Product(productId, "productAName");
+        productRepository.save(product);
+        var offerId1 = "offerA";
+        var offerName1 = "offerA";
+        offerRepository.save(new Offer(offerId1, offerName1, product));
+
+        var request = new IngestionRequest(
+                RequestOperationType.DELETE_OFFER,
+                offerId1,
+                null,
+                null,
+                null,
+                null
+        );
+
+        //when
+        var responseOperations = service.getBaseSearchEngineOperations(request);
+
+        //then
+        assertThat(responseOperations.size()).isEqualTo(1);
+        var operation = (DeleteOperation) responseOperations.getFirst();
+        assertThat(operation.getOperationType()).isEqualTo(SearchEngineOperationType.DELETE_SEARCHABLE_PRODUCT);
+        assertThat(operation.getProductId()).isEqualTo(productId);
+        verify(offerRepository, times(1)).deleteById(any());
+        assertThat(offerRepository.findAll().size()).isEqualTo(0);
+    }
+
+    @Test
+    void shouldDeleteExistingOfferForOfferWithProductWithMoreThanOneOffer() {
+        // given
+        var productId = "productA";
+        var product = new Product(productId, "productAName");
+        productRepository.save(product);
+        var offerId1 = "offerA";
+        var offerName1 = "offerA";
+        offerRepository.save(new Offer(offerId1, offerName1, product));
+        var offerId2 = "offerB";
+        var offerName2 = "offerB";
+        offerRepository.save(new Offer(offerId2, offerName2, product));
+
+        var request = new IngestionRequest(
+                RequestOperationType.DELETE_OFFER,
+                offerId1,
+                null,
+                null,
+                null,
+                null
+        );
+
+        //when
+        var responseOperations = service.getBaseSearchEngineOperations(request);
+
+        //then
+        assertThat(responseOperations.size()).isEqualTo(1);
+        var operation = (UpsertOperation) responseOperations.getFirst();
+        assertThat(operation.getOperationType()).isEqualTo(SearchEngineOperationType.UPSERT_SEARCHABLE_PRODUCT);
+        assertThat(operation.getProductId()).isEqualTo(productId);
+        verify(offerRepository, times(1)).deleteById(any());
+        assertThat(offerRepository.findAll().size()).isEqualTo(1);
+    }
+
+    @Test
+    void shouldDeleteExistingOfferWithoutProduct() {
+        // given
+        var offerId1 = "offerA";
+        var offerName1 = "offerA";
+        offerRepository.save(new Offer(offerId1, offerName1));
+        var request = new IngestionRequest(
+                RequestOperationType.DELETE_OFFER,
+                offerId1,
+                null,
+                null,
+                null,
+                null
+        );
+
+        //when
+        var responseOperations = service.getBaseSearchEngineOperations(request);
+
+        //then
+        assertThat(responseOperations.size()).isEqualTo(0);
+        verify(offerRepository, times(1)).deleteById(any());
+        assertThat(offerRepository.findAll().size()).isEqualTo(0);
+    }
+
+    @Test
+    void shouldDoNothingForDeleteIfOfferNotExists() {
+        // given
+        var offerId1 = "offerA";
+        var request = new IngestionRequest(
+                RequestOperationType.DELETE_OFFER,
+                offerId1,
+                null,
+                null,
+                null,
+                null
+        );
+
+        //when
+        var responseOperations = service.getBaseSearchEngineOperations(request);
+
+        //then
+        assertThat(responseOperations.size()).isEqualTo(0);
+        verify(offerRepository, times(0)).deleteById(any());
+        assertThat(offerRepository.findAll().size()).isEqualTo(0);
     }
 }

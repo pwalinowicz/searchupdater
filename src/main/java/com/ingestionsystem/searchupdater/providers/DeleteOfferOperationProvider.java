@@ -23,6 +23,9 @@ public class DeleteOfferOperationProvider extends SearchEngineOperationProvider 
 
         offerOptional.ifPresent(offer -> {
             offerRepository.deleteById(offerId);
+            if (offer.getProduct() == null) {
+                return;
+            }
             if (offer.getProduct().isValid()) {
                 var product = offer.getProduct();
                 var offers = offerRepository
