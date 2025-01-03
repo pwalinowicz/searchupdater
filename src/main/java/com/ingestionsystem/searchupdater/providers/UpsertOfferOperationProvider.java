@@ -20,9 +20,21 @@ public class UpsertOfferOperationProvider extends SearchEngineOperationProvider 
 
     @Override
     public List<BaseSearchEngineOperation> getSearchOperations(IngestionRequest request) {
+        var operations = new ArrayList<BaseSearchEngineOperation>();
         var offerId = request.offerId();
         var offerFromRequest = new Offer(offerId, request.offerName());
-        var operations = new ArrayList<>(getDeleteProductOperation(request, offerId, offerFromRequest));
+        var existingOffer = offerRepository.findById(offerId);
+
+        if (existingOffer.isPresent()) {
+            if (existingOffer.get().equals(offerFromRequest)
+                    && existingOffer.get().getProduct().getId().equals(request.relatedProductId())) {
+                // no changes in the offer
+                return List.of();
+            } else {
+                operations.addAll(getDeleteProductOperation(existingOffer.get().getProduct(),
+                        offerFromRequest, request.relatedProductId()));
+            }
+        }
 
         if (request.relatedProductId() == null) {
             offerFromRequest.setProduct(null);
@@ -35,31 +47,22 @@ public class UpsertOfferOperationProvider extends SearchEngineOperationProvider 
     }
 
     private List<BaseSearchEngineOperation> getDeleteProductOperation(
-            IngestionRequest request, String offerId, Offer offerFromRequest) {
-        var existingOffer = offerRepository.findById(offerId);
-        if (existingOffer.isPresent()) {
-            if (existingOffer.get().equals(offerFromRequest)
-                && existingOffer.get().getProduct().getId().equals(request.relatedProductId())) {
-                // no changes in the offer
-                return List.of();
-            }
-            var existingProduct = existingOffer.get().getProduct();
-            if (existingProduct != null && existingProduct.isValid()) {
-                var existingOffers = offerRepository.findByProductId(existingProduct.getId());
+            Product existingProduct, Offer offerFromRequest, String relatedProductId) {
+        if (existingProduct != null && existingProduct.isValid()) {
+            var existingOffers = offerRepository.findByProductId(existingProduct.getId());
 //                if (request.relatedProductId() == null && existingOffers.size() == 1) {
-                if (existingOffers.size() == 1) {
-                    // there is currently 1 offer related to the product
-                    // and request wants to delete it therefore, we need to delete a searchable product as well
-                    return List.of(SearchEngineOperationProvider.getDeleteSearchEngineOperation(existingProduct));
-                } else if (request.relatedProductId() == null && existingOffers.size() > 1) {
-                    // there are more than 1 offer related to the product
-                    // and request wants to delete 1 of them therefore, we need to update a searchable product
-                    // with updated list of offers
-                    offerFromRequest.setProduct(null);
-                    offerRepository.updateOrInsert(offerFromRequest);
-                    var offers = offerRepository.findByProductId(existingProduct.getId()).stream().map(Offer::getName).toList();
-                    return List.of(SearchEngineOperationProvider.getUpsertSearchEngineOperation(existingProduct, offers));
-                }
+            if (existingOffers.size() == 1) {
+                // there is currently 1 offer related to the product
+                // and request wants to delete it therefore, we need to delete a searchable product as well
+                return List.of(SearchEngineOperationProvider.getDeleteSearchEngineOperation(existingProduct));
+            } else if (relatedProductId == null && existingOffers.size() > 1) {
+                // there are more than 1 offer related to the product
+                // and request wants to delete 1 of them therefore, we need to update a searchable product
+                // with updated list of offers
+                offerFromRequest.setProduct(null);
+                offerRepository.updateOrInsert(offerFromRequest);
+                var offers = offerRepository.findByProductId(existingProduct.getId()).stream().map(Offer::getName).toList();
+                return List.of(SearchEngineOperationProvider.getUpsertSearchEngineOperation(existingProduct, offers));
             }
         }
         return List.of();
