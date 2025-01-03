@@ -1,5 +1,6 @@
 package com.ingestionsystem.searchupdater.providers;
 
+import com.ingestionsystem.searchupdater.model.Product;
 import com.ingestionsystem.searchupdater.operation.BaseSearchEngineOperation;
 import com.ingestionsystem.searchupdater.repository.OfferRepository;
 import com.ingestionsystem.searchupdater.repository.ProductRepository;
@@ -22,6 +23,7 @@ public class DeleteProductOperationProvider extends SearchEngineOperationProvide
         var productId = request.productId();
         var productOptional = productRepository.findById(productId);
         productOptional.ifPresent(product -> {
+            deleteAssociationBetweenProductAndOffers(product);
             productRepository.delete(product);
             operations.add(SearchEngineOperationProvider.getDeleteSearchEngineOperation(product));
         });
@@ -31,5 +33,10 @@ public class DeleteProductOperationProvider extends SearchEngineOperationProvide
     @Override
     protected void validateRequestForProvider(IngestionRequest request) {
         FieldValidator.validateField("productId", request.productId(), request.operation());
+    }
+
+    private void deleteAssociationBetweenProductAndOffers(Product product) {
+        var offers = offerRepository.findByProductId(product.getId());
+        offers.forEach(offer -> offer.setProduct(null));
     }
 }

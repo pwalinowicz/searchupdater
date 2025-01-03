@@ -10,7 +10,7 @@ public class Offer {
     private String id;
     private String name;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "offer_id")
     private Product product;
 
@@ -38,11 +38,24 @@ public class Offer {
         this.product = product;
     }
 
+    public Offer() {}
+
+    public Offer(String id, String name) {
+        this.id = id;
+        this.name = name;
+    }
+
+    public Offer(String id, String name, Product product) {
+        this.id = id;
+        this.name = name;
+        this.product = product;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (o == null || getClass() != o.getClass()) return false;
         Offer offer = (Offer) o;
-        return Objects.equals(id, offer.id) && Objects.equals(name, offer.name) && Objects.equals(product, offer.product);
+        return Objects.equals(id, offer.id) && Objects.equals(name, offer.name);
     }
 
     @Override
