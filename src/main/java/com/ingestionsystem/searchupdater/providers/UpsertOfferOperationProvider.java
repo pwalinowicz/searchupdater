@@ -38,8 +38,8 @@ public class UpsertOfferOperationProvider extends SearchEngineOperationProvider 
         }
 
         if (request.relatedProductId() == null) {
-            // if relatedProductId is null then we don't need upsert operation for a new product because there isn't one
-            // byt we must set a null association between newOffer and non-existing product
+            // if relatedProductId is null then we don't need upsert operation for a new product because there isn't one,
+            // but we must set a null association between a new offer and non-existing product
             deleteAssociationBetweenOfferAndProduct(offerFromRequest);
         } else {
             operations.addAll(getOperationsForNewProduct(offerFromRequest, request.relatedProductId()));
