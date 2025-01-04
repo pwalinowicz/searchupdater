@@ -38,18 +38,22 @@ public class UpdaterServiceImpl implements UpdaterService {
     private SearchEngineOperationProvider getProvider(IngestionRequest request) {
         switch (request.operation()) {
             case DELETE_OFFER -> {
+                logger.debug("DELETE OFFER operation for request: " + request);
                 return new DeleteOfferOperationProvider(productRepository, offerRepository, request);
             }
             case UPSERT_OFFER -> {
+                logger.debug("UPSERT OFFER operation for request: " + request);
                 return new UpsertOfferOperationProvider(productRepository, offerRepository, request);
             }
             case DELETE_PRODUCT -> {
+                logger.debug("DELETE PRODUCT operation for request: " + request);
                 return new DeleteProductOperationProvider(productRepository, offerRepository, request);
             }
             case UPSERT_PRODUCT -> {
+                logger.debug("UPSERT PRODUCT operation for request: " + request);
                 return new UpsertProductOperationProvider(productRepository, offerRepository, request);
             }
-            default -> throw new IllegalArgumentException("Incorrect operation");
+            default -> throw new IllegalArgumentException("Incorrect operation: " + request.operation());
         }
     }
 }
