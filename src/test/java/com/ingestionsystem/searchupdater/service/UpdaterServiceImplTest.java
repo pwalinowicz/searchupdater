@@ -328,7 +328,62 @@ public class UpdaterServiceImplTest {
     }
 
     @Test
-    void shouldUpdateExistingOfferForProductWithMoreThanOneOffersWithNullProduct() {
+    void shouldUpdateExistingOfferForProductWithOneOfferWithNewProduct() {
+        // given
+        var productId1 = "productA";
+        var productName1 = "productAName";
+        var productId2 = "productB";
+        var productName2 = "productBName";
+        var product1 = new Product(productId1, productName1);
+        productRepository.save(product1);
+        productRepository.save(new Product(productId2, productName2));
+        var offerId = "offerA";
+        var offerName = "offerA";
+        offerRepository.save(new Offer(offerId, offerName, product1));
+
+        var request = new IngestionRequest(
+                RequestOperationType.UPSERT_OFFER,
+                offerId,
+                offerName,
+                null,
+                productId2,
+                null
+        );
+
+        //when
+        var responseOperations = service.getBaseSearchEngineOperations(request);
+
+        //then
+        assertThat(responseOperations.size()).isEqualTo(2);
+        assertThat(responseOperations.stream()
+                .filter(o -> o.getOperationType() == SearchEngineOperationType.DELETE_SEARCHABLE_PRODUCT)
+                .count()
+        ).isEqualTo(1);
+        assertThat(responseOperations.stream()
+                .filter(o -> o.getOperationType() == SearchEngineOperationType.UPSERT_SEARCHABLE_PRODUCT)
+                .count()
+        ).isEqualTo(1);
+
+        assertThat(responseOperations.stream()
+                .filter(o -> o.getOperationType() == SearchEngineOperationType.DELETE_SEARCHABLE_PRODUCT)
+                .map(BaseSearchEngineOperation::getProductId)
+                .findFirst().get()
+        ).isEqualTo(productId1);
+        assertThat(responseOperations.stream()
+                .filter(o -> o.getOperationType() == SearchEngineOperationType.UPSERT_SEARCHABLE_PRODUCT)
+                .map(BaseSearchEngineOperation::getProductId)
+                .findFirst().get()
+        ).isEqualTo(productId2);
+
+        assertThat(offerRepository.findById(offerId).isPresent()).isTrue();
+        offerRepository.findById(offerId).ifPresent(offer -> assertThat(offer.getProduct().getId()).isEqualTo(productId2));
+
+        assertThat(productRepository.findById(productId1).isPresent()).isTrue();
+        assertThat(productRepository.findAll().size()).isEqualTo(2);
+    }
+
+    @Test
+    void shouldUpdateExistingOfferForProductWithMoreThanOneOfferWithNullProduct() {
         // given
         var productId = "productA";
         var product = new Product(productId, "productAName");
@@ -368,7 +423,7 @@ public class UpdaterServiceImplTest {
     }
 
     @Test
-    void shouldUpdateExistingOfferWithNewProduct() {
+    void shouldUpdateExistingOfferForProductWithMoreThanOneOfferWithNewProduct() {
         // given
         var productId1 = "productA";
         var productId2 = "productB";
@@ -380,8 +435,11 @@ public class UpdaterServiceImplTest {
         var offerName1 = "offerA";
         var offerId2 = "offerB";
         var offerName2 = "offerB";
+        var offerId3 = "offerC";
+        var offerName3 = "offerC";
         offerRepository.save(new Offer(offerId1, offerName1, product1));
-        offerRepository.save(new Offer(offerId2, offerName2, product2));
+        offerRepository.save(new Offer(offerId2, offerName2, product1));
+        offerRepository.save(new Offer(offerId3, offerName3, product2));
 
         var request = new IngestionRequest(
                 RequestOperationType.UPSERT_OFFER,
@@ -398,30 +456,30 @@ public class UpdaterServiceImplTest {
         //then
         assertThat(responseOperations.size()).isEqualTo(2);
         assertThat(responseOperations.stream()
-                .filter(o -> o.getOperationType() == SearchEngineOperationType.DELETE_SEARCHABLE_PRODUCT)
-                .count()
-        ).isEqualTo(1);
-        assertThat(responseOperations.stream()
                 .filter(o -> o.getOperationType() == SearchEngineOperationType.UPSERT_SEARCHABLE_PRODUCT)
                 .count()
-        ).isEqualTo(1);
+        ).isEqualTo(2);
 
         assertThat(responseOperations.stream()
-                .filter(o -> o.getOperationType() == SearchEngineOperationType.DELETE_SEARCHABLE_PRODUCT)
+                .filter(o -> o.getOperationType() == SearchEngineOperationType.UPSERT_SEARCHABLE_PRODUCT)
                 .map(BaseSearchEngineOperation::getProductId)
-                .findFirst().get()
-        ).isEqualTo(productId1);
+                .filter(id -> id.equals(productId1))
+                .count()
+        ).isEqualTo(1);
         assertThat(responseOperations.stream()
                 .filter(o -> o.getOperationType() == SearchEngineOperationType.UPSERT_SEARCHABLE_PRODUCT)
                 .map(BaseSearchEngineOperation::getProductId)
-                .findFirst().get()
-        ).isEqualTo(productId2);
+                .filter(id -> id.equals(productId2))
+                .count()
+        ).isEqualTo(1);
 
         assertThat(offerRepository.findById(offerId1).isPresent()).isTrue();
         assertThat(offerRepository.findById(offerId2).isPresent()).isTrue();
+        assertThat(offerRepository.findById(offerId3).isPresent()).isTrue();
 
         offerRepository.findById(offerId1).ifPresent(offer -> assertThat(offer.getProduct().getId()).isEqualTo(productId2));
-        offerRepository.findById(offerId2).ifPresent(offer -> assertThat(offer.getProduct().getId()).isEqualTo(productId2));
+        offerRepository.findById(offerId2).ifPresent(offer -> assertThat(offer.getProduct().getId()).isEqualTo(productId1));
+        offerRepository.findById(offerId3).ifPresent(offer -> assertThat(offer.getProduct().getId()).isEqualTo(productId2));
 
         assertThat(productRepository.findAll().size()).isEqualTo(2);
     }

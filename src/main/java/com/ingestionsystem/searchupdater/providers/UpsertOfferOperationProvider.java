@@ -10,7 +10,6 @@ import com.ingestionsystem.searchupdater.validation.FieldValidator;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 
 public class UpsertOfferOperationProvider extends SearchEngineOperationProvider {
 
@@ -32,15 +31,16 @@ public class UpsertOfferOperationProvider extends SearchEngineOperationProvider 
                 // no changes in the offer
                 return List.of();
             } else {
-                operations.addAll(getOperationsForExistingProduct(existingOffer.get().getProduct(),
-                        offerFromRequest, request.relatedProductId()));
+                operations.addAll(
+                        getOperationsForExistingProduct(existingOffer.get().getProduct(), offerFromRequest)
+                );
             }
         }
 
         if (request.relatedProductId() == null) {
-            // if relatedProductId is null then we don't need additional upsert
-            offerFromRequest.setProduct(null);
-            offerRepository.updateOrInsert(offerFromRequest);
+            // if relatedProductId is null then we don't need upsert operation for a new product because there isn't one
+            // byt we must set a null association between newOffer and non-existing product
+            deleteAssociationBetweenOfferAndProduct(offerFromRequest);
         } else {
             operations.addAll(getOperationsForNewProduct(offerFromRequest, request.relatedProductId()));
         }
@@ -49,20 +49,19 @@ public class UpsertOfferOperationProvider extends SearchEngineOperationProvider 
     }
 
     private List<BaseSearchEngineOperation> getOperationsForExistingProduct(
-            Product existingProduct, Offer offerFromRequest, String relatedProductId) {
+            Product existingProduct, Offer offerFromRequest) {
         if (existingProduct != null && existingProduct.isValid()) {
             var existingOffers = offerRepository.findByProductId(existingProduct.getId());
 
-            if (existingOffers.size() == 1 && !Objects.equals(relatedProductId, existingProduct.getId())) {
+            if (existingOffers.size() == 1) {
                 // there is currently 1 offer related to the product
                 // and request wants to delete it therefore, we need to delete a searchable product as well
                 return List.of(SearchEngineOperationProvider.getDeleteSearchEngineOperation(existingProduct));
-            } else if (relatedProductId == null && existingOffers.size() > 1) {
+            } else if (existingOffers.size() > 1) {
                 // there are more than 1 offer related to the product
                 // and request wants to delete 1 of them therefore, we need to update a searchable product
                 // with updated list of offers
-                offerFromRequest.setProduct(null);
-                offerRepository.updateOrInsert(offerFromRequest);
+                deleteAssociationBetweenOfferAndProduct(offerFromRequest);
                 var offers = offerRepository.findByProductId(existingProduct.getId()).stream().map(Offer::getName).toList();
                 return List.of(SearchEngineOperationProvider.getUpsertSearchEngineOperation(existingProduct, offers));
             }
@@ -73,21 +72,28 @@ public class UpsertOfferOperationProvider extends SearchEngineOperationProvider 
     private List<BaseSearchEngineOperation> getOperationsForNewProduct(Offer offer, String relatedProductId) {
         var newProductOptional = productRepository.findById(relatedProductId);
         if (newProductOptional.isPresent()) {
-            var existingProduct = newProductOptional.get();
-            offer.setProduct(existingProduct);
-            offerRepository.updateOrInsert(offer);
+            var newProduct = newProductOptional.get();
+            associateOfferAndProduct(offer, newProduct);
             if (newProductOptional.get().isValid()) {
-                var offers = offerRepository.findByProductId(existingProduct.getId()).stream().map(Offer::getName).toList();
-                return List.of(SearchEngineOperationProvider.getUpsertSearchEngineOperation(existingProduct, offers));
+                var offers = offerRepository.findByProductId(newProduct.getId()).stream().map(Offer::getName).toList();
+                return List.of(SearchEngineOperationProvider.getUpsertSearchEngineOperation(newProduct, offers));
             }
         } else {
             var product = new Product();
             product.setId(relatedProductId);
             productRepository.updateOrInsert(product);
-            offer.setProduct(product);
-            offerRepository.updateOrInsert(offer);
+            associateOfferAndProduct(offer, product);
         }
         return List.of();
+    }
+
+    private void deleteAssociationBetweenOfferAndProduct(Offer offer) {
+        associateOfferAndProduct(offer, null);
+    }
+
+    private void associateOfferAndProduct(Offer offer, Product product) {
+        offer.setProduct(product);
+        offerRepository.updateOrInsert(offer);
     }
 
     @Override
