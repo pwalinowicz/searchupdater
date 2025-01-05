@@ -6,12 +6,6 @@ spring:
     username: sa
     password: sa
     driverClassName: org.h2.Driver
-#  datasource:
-#    platform: postgres
-#    url: jdbc:postgresql://localhost:5432/mydb
-#    username: foo
-#    password: bar
-#    driverClassName: org.postgresql.Driver
   jpa:
     database-platform: org.hibernate.dialect.H2Dialect
 server:
