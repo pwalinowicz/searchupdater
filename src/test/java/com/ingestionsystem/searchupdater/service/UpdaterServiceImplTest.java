@@ -40,7 +40,7 @@ public class UpdaterServiceImplTest {
     }
 
     @Test
-    void shouldDeleteExistingProduct() {
+    void shouldDeleteExistingProductWithoutOffers() {
         // given
         var productId = "productA";
         var product = new Product(productId, "productAName");
@@ -58,11 +58,7 @@ public class UpdaterServiceImplTest {
         var responseOperations = service.getBaseSearchEngineOperations(request);
 
         //then
-        assertThat(responseOperations.size()).isEqualTo(1);
-        var operation = responseOperations.getFirst();
-        assertThat(operation.getOperationType()).isEqualTo(SearchEngineOperationType.DELETE_SEARCHABLE_PRODUCT);
-        assertThat(operation.getProductId()).isEqualTo(productId);
-        verify(productRepository, times(1)).delete(any());
+        assertThat(responseOperations.size()).isEqualTo(0);
         assertThat(productRepository.findAll().size()).isEqualTo(0);
     }
 
@@ -619,5 +615,315 @@ public class UpdaterServiceImplTest {
         assertThat(responseOperations.size()).isEqualTo(0);
         verify(offerRepository, times(0)).deleteById(any());
         assertThat(offerRepository.findAll().size()).isEqualTo(0);
+    }
+
+    @Test
+    void shouldUpdateOfferForNullProductWithNullProduct() {
+        // given
+        var offerId = "offerA";
+        var offerName = "offerA";
+
+        var request = new IngestionRequest(
+                RequestOperationType.UPSERT_OFFER,
+                offerId,
+                offerName,
+                null,
+                null,
+                null
+        );
+
+        //when
+        var responseOperations = service.getBaseSearchEngineOperations(request);
+        var secondResponseOperations = service.getBaseSearchEngineOperations(request);
+
+        //then
+        assertThat(responseOperations.size()).isEqualTo(0);
+        assertThat(secondResponseOperations.size()).isEqualTo(0);
+        assertThat(productRepository.findAll().size()).isEqualTo(0);
+        assertThat(offerRepository.findAll().size()).isEqualTo(1);
+    }
+
+    @Test
+    void shouldUpdateOfferWithNullProductWithNewProductWithoutOffers() {
+        // given
+        var offerId = "offerA";
+        var offerName = "offerA";
+        var relatedProductId = "productA";
+
+        var request = new IngestionRequest(
+                RequestOperationType.UPSERT_OFFER,
+                offerId,
+                offerName,
+                null,
+                null,
+                null
+        );
+        var secondRequest = new IngestionRequest(
+                RequestOperationType.UPSERT_OFFER,
+                offerId,
+                offerName,
+                null,
+                relatedProductId,
+                null
+        );
+
+        //when
+        var responseOperations = service.getBaseSearchEngineOperations(request);
+        var secondResponseOperations = service.getBaseSearchEngineOperations(secondRequest);
+
+        //then
+        assertThat(responseOperations.size()).isEqualTo(0);
+        assertThat(secondResponseOperations.size()).isEqualTo(0);
+        assertThat(productRepository.findAll().size()).isEqualTo(1);
+        assertThat(offerRepository.findAll().size()).isEqualTo(1);
+    }
+
+    @Test
+    void shouldUpdateOfferWithNullProductWithNewProductWithOffers() {
+        // given
+        var offerId = "offerA";
+        var offerName = "offerA";
+        var relatedProductId = "productA";
+        var productName = "productAName";
+
+        var request = new IngestionRequest(
+                RequestOperationType.UPSERT_OFFER,
+                offerId,
+                offerName,
+                null,
+                null,
+                null
+        );
+        var secondRequest = new IngestionRequest(
+                RequestOperationType.UPSERT_OFFER,
+                offerId,
+                offerName,
+                null,
+                relatedProductId,
+                null
+        );
+        var thirdRequest = new IngestionRequest(
+                RequestOperationType.UPSERT_PRODUCT,
+                null,
+                null,
+                relatedProductId,
+                null,
+                productName
+        );
+
+        //when
+        service.getBaseSearchEngineOperations(request);
+        service.getBaseSearchEngineOperations(secondRequest);
+        var thirdResponseOperations = service.getBaseSearchEngineOperations(thirdRequest);
+
+        //then
+        assertThat(thirdResponseOperations.size()).isEqualTo(1);
+        var operation = (UpsertOperation) thirdResponseOperations.getFirst();
+        assertThat(operation.getOperationType()).isEqualTo(SearchEngineOperationType.UPSERT_SEARCHABLE_PRODUCT);
+        assertThat(operation.getProductId()).isEqualTo(relatedProductId);
+        assertThat(productRepository.findAll().size()).isEqualTo(1);
+        assertThat(offerRepository.findAll().size()).isEqualTo(1);
+    }
+
+    @Test
+    void shouldRemoveProductCorrectlyAfterDeletingOffer() {
+        // given
+        var offerId = "offerA";
+        var offerName = "offerAName";
+        var productId = "productA";
+        var productName = "productAName";
+
+        var upsertProductRequest = new IngestionRequest(
+                RequestOperationType.UPSERT_PRODUCT,
+                null,
+                null,
+                productId,
+                null,
+                productName
+        );
+
+        var upsertOfferRequest = new IngestionRequest(
+                RequestOperationType.UPSERT_OFFER,
+                offerId,
+                offerName,
+                null,
+                productId,
+                null
+        );
+
+        var deleteOfferRequest = new IngestionRequest(
+                RequestOperationType.DELETE_OFFER,
+                offerId,
+                null,
+                null,
+                null,
+                null
+        );
+
+        var deleteProductRequest = new IngestionRequest(
+                RequestOperationType.DELETE_PRODUCT,
+                null,
+                null,
+                productId,
+                null,
+                null
+        );
+
+        //when
+        var upsertProductResponse = service.getBaseSearchEngineOperations(upsertProductRequest);
+        var upsertOfferResponse = service.getBaseSearchEngineOperations(upsertOfferRequest);
+        var deleteOfferResponse = service.getBaseSearchEngineOperations(deleteOfferRequest);
+        var deleteProductResponse = service.getBaseSearchEngineOperations(deleteProductRequest);
+
+        //then
+        assertThat(upsertProductResponse.size()).isEqualTo(0);
+        assertThat(upsertOfferResponse.size()).isEqualTo(1);
+        assertThat(deleteOfferResponse.size()).isEqualTo(1);
+        assertThat(deleteProductResponse.size()).isEqualTo(0); //product should have been already deleted in previous step
+
+        var upsertOperation = (UpsertOperation) upsertOfferResponse.getFirst();
+        assertThat(upsertOperation.getOperationType()).isEqualTo(SearchEngineOperationType.UPSERT_SEARCHABLE_PRODUCT);
+        assertThat(upsertOperation.getProductId()).isEqualTo(productId);
+        assertThat(upsertOperation.getOfferNames().getFirst()).isEqualTo(offerName);
+
+        var operation = deleteOfferResponse.getFirst();
+        assertThat(operation.getOperationType()).isEqualTo(SearchEngineOperationType.DELETE_SEARCHABLE_PRODUCT);
+        assertThat(operation.getProductId()).isEqualTo(productId);
+        verify(productRepository, times(1)).delete(any());
+        assertThat(productRepository.findAll().size()).isEqualTo(0);
+    }
+
+    @Test
+    void shouldUpdateOfferNameCorrectly() {
+        // given
+        var offerId = "offerA";
+        var offerName = "offerAName";
+        var newOfferName = "newOfferAName";
+        var productId = "productA";
+        var productName = "productAName";
+
+        var upsertProductRequest = new IngestionRequest(
+                RequestOperationType.UPSERT_PRODUCT,
+                null,
+                null,
+                productId,
+                null,
+                productName
+        );
+
+        var upsertOfferRequest = new IngestionRequest(
+                RequestOperationType.UPSERT_OFFER,
+                offerId,
+                offerName,
+                null,
+                productId,
+                null
+        );
+
+        var newOfferNameRequest = new IngestionRequest(
+                RequestOperationType.UPSERT_OFFER,
+                offerId,
+                newOfferName,
+                null,
+                productId,
+                null
+        );
+
+        //when
+        var upsertProductResponse = service.getBaseSearchEngineOperations(upsertProductRequest);
+        var upsertOfferResponse = service.getBaseSearchEngineOperations(upsertOfferRequest);
+        var newOfferNameResponse = service.getBaseSearchEngineOperations(newOfferNameRequest);
+
+        //then
+        assertThat(upsertProductResponse.size()).isEqualTo(0);
+        assertThat(upsertOfferResponse.size()).isEqualTo(1);
+        assertThat(newOfferNameResponse.size()).isEqualTo(1);
+
+        var upsertOperation = (UpsertOperation) upsertOfferResponse.getFirst();
+        assertThat(upsertOperation.getOperationType()).isEqualTo(SearchEngineOperationType.UPSERT_SEARCHABLE_PRODUCT);
+        assertThat(upsertOperation.getProductId()).isEqualTo(productId);
+        assertThat(upsertOperation.getOfferNames().getFirst()).isEqualTo(offerName);
+
+        var operation = (UpsertOperation) newOfferNameResponse.getFirst();
+        assertThat(operation.getOperationType()).isEqualTo(SearchEngineOperationType.UPSERT_SEARCHABLE_PRODUCT);
+        assertThat(operation.getProductId()).isEqualTo(productId);
+        assertThat(operation.getOfferNames().getFirst()).isEqualTo(newOfferName);
+    }
+
+    @Test
+    void shouldUpdateOfferNameCorrectlyForProductWithMoreThanOneOffer() {
+        // given
+        var offerId = "offerA";
+        var offerName = "offerAName";
+        var newOfferName = "newOfferAName";
+        var secondOfferId = "offerB";
+        var secondOfferName = "offerBName";
+        var productId = "productA";
+        var productName = "productAName";
+
+        var upsertProductRequest = new IngestionRequest(
+                RequestOperationType.UPSERT_PRODUCT,
+                null,
+                null,
+                productId,
+                null,
+                productName
+        );
+
+        var upsertOfferRequest = new IngestionRequest(
+                RequestOperationType.UPSERT_OFFER,
+                offerId,
+                offerName,
+                null,
+                productId,
+                null
+        );
+
+        var secondUpsertOfferRequest = new IngestionRequest(
+                RequestOperationType.UPSERT_OFFER,
+                secondOfferId,
+                secondOfferName,
+                null,
+                productId,
+                null
+        );
+
+        var newOfferNameRequest = new IngestionRequest(
+                RequestOperationType.UPSERT_OFFER,
+                offerId,
+                newOfferName,
+                null,
+                productId,
+                null
+        );
+
+        //when
+        var upsertProductResponse = service.getBaseSearchEngineOperations(upsertProductRequest);
+        var upsertOfferResponse = service.getBaseSearchEngineOperations(upsertOfferRequest);
+        var upsertSecondOfferResponse = service.getBaseSearchEngineOperations(secondUpsertOfferRequest);
+        var newOfferNameResponse = service.getBaseSearchEngineOperations(newOfferNameRequest);
+
+        //then
+        assertThat(upsertProductResponse.size()).isEqualTo(0);
+        assertThat(upsertOfferResponse.size()).isEqualTo(1);
+        assertThat(upsertSecondOfferResponse.size()).isEqualTo(1);
+        assertThat(newOfferNameResponse.size()).isEqualTo(1);
+
+        var upsertOperation = (UpsertOperation) upsertOfferResponse.getFirst();
+        assertThat(upsertOperation.getOperationType()).isEqualTo(SearchEngineOperationType.UPSERT_SEARCHABLE_PRODUCT);
+        assertThat(upsertOperation.getProductId()).isEqualTo(productId);
+        assertThat(upsertOperation.getOfferNames().getFirst()).isEqualTo(offerName);
+
+        var secondUpsertOperation = (UpsertOperation) upsertSecondOfferResponse.getFirst();
+        assertThat(secondUpsertOperation.getOperationType()).isEqualTo(SearchEngineOperationType.UPSERT_SEARCHABLE_PRODUCT);
+        assertThat(secondUpsertOperation.getProductId()).isEqualTo(productId);
+        assertThat(secondUpsertOperation.getOfferNames().size()).isEqualTo(2);
+        assertThat(secondUpsertOperation.getOfferNames()).contains(offerName, secondOfferName);
+
+        var newOfferNameOperation = (UpsertOperation) newOfferNameResponse.getFirst();
+        assertThat(newOfferNameOperation.getOperationType()).isEqualTo(SearchEngineOperationType.UPSERT_SEARCHABLE_PRODUCT);
+        assertThat(newOfferNameOperation.getProductId()).isEqualTo(productId);
+        assertThat(newOfferNameOperation.getOfferNames().size()).isEqualTo(2);
+        assertThat(newOfferNameOperation.getOfferNames()).contains(newOfferName, secondOfferName);
     }
 }

@@ -23,9 +23,12 @@ public class DeleteProductOperationProvider extends SearchEngineOperationProvide
         var productId = request.productId();
         var productOptional = productRepository.findById(productId);
         productOptional.ifPresent(product -> {
+            var offers = offerRepository.findByProductId(product.getId());
+            if (!offers.isEmpty()) {
+                operations.add(SearchEngineOperationProvider.getDeleteSearchEngineOperation(product));
+            }
             deleteAssociationBetweenProductAndOffers(product);
             productRepository.delete(product);
-            operations.add(SearchEngineOperationProvider.getDeleteSearchEngineOperation(product));
         });
         return operations;
     }
