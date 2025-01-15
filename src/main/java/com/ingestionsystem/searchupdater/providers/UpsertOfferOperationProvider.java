@@ -26,14 +26,17 @@ public class UpsertOfferOperationProvider extends SearchEngineOperationProvider 
         var existingOffer = offerRepository.findById(offerId);
 
         if (existingOffer.isPresent()) {
-            if (existingOffer.get().equals(offerFromRequest)
-                    && existingOffer.get().getProduct().getId().equals(request.relatedProductId())) {
-                // no changes in the offer
-                return List.of();
-            } else {
-                operations.addAll(
-                        getOperationsForExistingProduct(existingOffer.get().getProduct(), offerFromRequest)
-                );
+            if (existingOffer.get().equals(offerFromRequest)) {
+                if (existingOffer.get().getProduct() != null) {
+                    if (existingOffer.get().getProduct().getId().equals(request.relatedProductId())) {
+                        // no changes in the offer
+                        return List.of();
+                    } else {
+                        operations.addAll(
+                                getOperationsForExistingProduct(existingOffer.get().getProduct(), offerFromRequest)
+                        );
+                    }
+                }
             }
         }
 
